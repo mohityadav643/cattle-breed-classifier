@@ -1,44 +1,67 @@
 import os
 import shutil
-import random
+from sklearn.model_selection import train_test_split
 
 base_path = "dataset/all"
 output_base = "dataset"
 
-split_ratio = (0.7, 0.2, 0.1)
-
-print("Folders:", os.listdir(base_path))
-
+# delete old splits
 for folder in ["train", "val", "test"]:
     path = os.path.join(output_base, folder)
     if os.path.exists(path):
         shutil.rmtree(path)
-    os.makedirs(path)
 
+image_paths = []
+labels = []
+
+# breed only
 for breed in os.listdir(base_path):
     breed_path = os.path.join(base_path, breed)
-    images = os.listdir(breed_path)
 
-    random.shuffle(images)
+    if not os.path.isdir(breed_path):
+        continue
 
-    total = len(images)
-    train_end = int(split_ratio[0] * total)
-    val_end = int((split_ratio[0] + split_ratio[1]) * total)
+    for img in os.listdir(breed_path):
+        full_path = os.path.join(breed_path, img)
 
-    splits = {
-        "train": images[:train_end],
-        "val": images[train_end:val_end],
-        "test": images[val_end:]
-    }
+        if not os.path.isfile(full_path):
+            continue
 
-    for split in splits:
-        split_dir = os.path.join(output_base, split, breed)
-        os.makedirs(split_dir, exist_ok=True)
+        image_paths.append(full_path)
+        labels.append(breed)
 
-        for img in splits[split]:
-            shutil.copy(
-                os.path.join(breed_path, img),
-                os.path.join(split_dir, img)
-            )
+print("Total Images:", len(image_paths))
+print("Total Classes:", len(set(labels)))
 
-print("✅ SPLIT DONE")
+# split
+X_train, X_temp, y_train, y_temp = train_test_split(
+    image_paths, labels,
+    test_size=0.3,
+    stratify=labels,
+    random_state=42
+)
+
+X_val, X_test, y_val, y_test = train_test_split(
+    X_temp, y_temp,
+    test_size=1/3,
+    stratify=y_temp,
+    random_state=42
+)
+
+splits = {
+    "train": (X_train, y_train),
+    "val": (X_val, y_val),
+    "test": (X_test, y_test)
+}
+
+# copy
+for split in splits:
+    X, y = splits[split]
+
+    for img_path, label in zip(X, y):
+        target_dir = os.path.join(output_base, split, label)
+        os.makedirs(target_dir, exist_ok=True)
+
+        shutil.copy(img_path, os.path.join(target_dir, os.path.basename(img_path)))
+
+print("🔥 DATASET READY")
